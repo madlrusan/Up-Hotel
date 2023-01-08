@@ -2,7 +2,14 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { showMessage } from "react-native-flash-message";
 import { baseUrl } from "../../constants/APIUrls";
 import { getData, storeData } from "../../constants/Storage";
-
+import jwt_decode from "jwt-decode";
+const parseJwt = (token) => {
+	try {
+		return jwt_decode(token);
+	} catch (e) {
+		return null;
+	}
+};
 export class UserAPI {
 	baseUrl : string;
 	_endpoints: Endpoints;
@@ -14,6 +21,7 @@ export class UserAPI {
 			login: "/api/auth/login",
 			getUser: "/api/auth/user",
 			getStaff: "/api/auth/staff",
+			addStaff: "/api/auth/user",
 		};
 	}
 	login = async (email: string, password: string) => {
@@ -27,8 +35,10 @@ export class UserAPI {
 		}).then();
 		if (response.status === 200) {
 			const content = await response.json();
-			await storeData("jwt", content.jwt);
-			return true;
+			await storeData("token", content.token);
+			const user = parseJwt(content.token);
+			await storeData("user_role", user.role);
+			return user;
 		} else {
 			const content = await response.json();
 
@@ -36,11 +46,12 @@ export class UserAPI {
 				message: content.message,
 				type: "warning",
 			});
+			console.log(content);
 			return false;
 		}
 	};
 	logOut = () => {
-		AsyncStorage.removeItem("jwt");
+		AsyncStorage.removeItem("token");
 		showMessage({
 			message: "Logout Successful",
 			type: "success",
@@ -54,7 +65,7 @@ export class UserAPI {
 			credentials: "include",
 			headers: {
 				"Content-Type": "application/json",
-				Authorization: "Bearer " + (await getData("jwt")),
+				Authorization: "Bearer " + (await getData("token")),
 			},
 		});
 		const content = await response.json();
@@ -70,14 +81,39 @@ export class UserAPI {
 			credentials: "include",
 			headers: {
 				"Content-Type": "application/json",
-				Authorization: "Bearer " + (await getData("jwt")),
+				Authorization: "Bearer " + (await getData("token")),
 			},
 		});
 		const content = await response.json();
+		console.log(content);
 		if (content.status === 401) {
 			throw "Unauthorized";
 		}
-		return content;
+		return await content;
 	};  
+
+	addStaff = async (firstName: string, lastName: string, email: string, phoneNumber: string, roles: string[]) => {
+		const response = await fetch(this.baseUrl + this._endpoints.addStaff, {
+			method: "POST",
+			credentials: "include",
+			headers: {
+				"Content-Type": "application/json",
+			},
+			body: JSON.stringify({ firstName, lastName, email, phoneNumber, roles }),
+		}).then();
+		if (response.status === 200) {
+			// const content = await response.json();
+			return true;
+		} else {
+			const content = await response.json();
+
+			showMessage({
+				message: content.message,
+				type: "warning",
+			});
+			console.log(content);
+			return false;
+		}
+	};
 
 }
